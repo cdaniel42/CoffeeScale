@@ -1,7 +1,7 @@
 
 // Include Libraries
 #include "Arduino.h"
-#include "LiquidCrystal_PCF8574.h"
+#include "ssd1306.h"
 #include "HX711.h"
 #include "Button.h"
 #include <EEPROM.h>
@@ -23,12 +23,6 @@
 
 
 // Global variables and defines
-#define LCD_ADDRESS 0x27
-// Define LCD characteristics
-#define LCD_ROWS 2
-#define LCD_COLUMNS 16
-#define BACKLIGHT 1
-
 // Constants
 #define MAX_RUNTIME 50
 #define MAX_SHOTTIME 35
@@ -40,7 +34,6 @@
 #define MASS_ESTIMATION_WINDOW 3
 
 // object initialization
-LiquidCrystal_PCF8574 lcdI2C;
 
 HX711 scale(SCALE_PIN_DAT, SCALE_PIN_CLK);
 
@@ -88,9 +81,9 @@ void setup()
     Serial.begin(9600);
     
     // initialize the lcd
-    lcdI2C.begin(LCD_COLUMNS, LCD_ROWS, LCD_ADDRESS, BACKLIGHT); 
-    lcdI2C.clear();
-    lcdI2C.setCursor(0,0);
+    ssd1306_setFixedFont(ssd1306xled_font8x16);
+    ssd1306_128x64_i2c_init();
+    ssd1306_clearScreen();
     scale.set_scale(calibration_factor / SCALE_CALIB_FAC); 
 //    tare_scale(); //Assuming there is no weight on the scale at start up, reset the scale to 0
     check_scale(true);
@@ -189,39 +182,29 @@ void check_scale(bool reset){
 /////////////////////////
 /////////////////////////
 void update_display(bool force_update){
+  static String message;
   if ( (millis() - last_disp_update) < DISP_UPDATE_FREQ && force_update==false)
     return;
     
   last_disp_update = millis();
-  
-//  lcdI2C.clear();                          // Clear LCD screen.
 
-  lcdI2C.setCursor(0,0);
-  char LCDmsg[20];
-  dtostrf(curr_mass,4,1,LCDmsg);  
-  
-  lcdI2C.print(LCDmsg);
-  lcdI2C.print(" /");
-  char LCDmsg_short[20];
-  dtostrf(target_mass,3,0,LCDmsg_short);  
-  lcdI2C.print(LCDmsg_short);
-  lcdI2C.print("g       ");
-  
-  
-//  lcdI2C.selectLine(2);                    // Set cursor at the begining of line 2
-  lcdI2C.setCursor(0,1);
-  dtostrf(curr_shottime,4,1,LCDmsg_short);
-  lcdI2C.print(LCDmsg_short);
+  message = String( 
+            String(curr_mass) + 
+            "/" + 
+            String(target_mass) 
+            + "g     " );
+  ssd1306_printFixed(0,  4, message.c_str(), STYLE_BOLD);
 
-  lcdI2C.print("(");
-  dtostrf(curr_runtime,4,1,LCDmsg_short);
-  lcdI2C.print(LCDmsg_short);
-  lcdI2C.print(")");
+  message = String( 
+            String(curr_shottime) + 
+            "(" + 
+            String(curr_runtime) + 
+            ")/" + 
+            String(MAX_SHOTTIME) 
+            + "s     " );
+  ssd1306_printFixed(0,  32, message.c_str(), STYLE_BOLD);
   
-  lcdI2C.print("/");
-  dtostrf(MAX_SHOTTIME,4,1,LCDmsg_short);
-  lcdI2C.print(LCDmsg_short);
-  lcdI2C.print("s      ");
+
   
 }
 
@@ -274,20 +257,13 @@ void check_encoder() {
 /////////////////////////
 /////////////////////////
 void tare_scale(){
-
-  lcdI2C.setCursor(0,0);
-  lcdI2C.print("                ");
-  lcdI2C.setCursor(0,1);
-  lcdI2C.print("                ");
-
-  lcdI2C.setCursor(0,0);
-  lcdI2C.print("Taring Scale");
+  static String message;
+  ssd1306_clearScreen( );
+  ssd1306_printFixed(0, 4, "Taring Scale", STYLE_BOLD);
+  
   scale.tare();
   check_scale(true);
-  lcdI2C.setCursor(0,1);
-  char LCDmsg[20];
-  dtostrf(curr_mass,4,1,LCDmsg);  
-  lcdI2C.print(LCDmsg);
+  ssd1306_printFixed(0, 4, String(curr_mass).c_str(), STYLE_BOLD);
   int taring_counter = 0;
   while (
     ((curr_mass>1) || (curr_mass <-1)) 
@@ -295,18 +271,10 @@ void tare_scale(){
     scale.tare();
     check_scale(true);
     taring_counter++;
-    lcdI2C.print(",");
-    dtostrf(curr_mass,4,1,LCDmsg);  
-    lcdI2C.print(LCDmsg);
+    ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
   }
   
-//  delay(1000);
-  lcdI2C.setCursor(0,2);
-  lcdI2C.print("                    ");
-  lcdI2C.setCursor(0,3);
-  lcdI2C.print("                    ");
-  
-  
+  ssd1306_clearScreen( );
 }
 
 /////////////////////////
