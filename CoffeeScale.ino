@@ -13,12 +13,13 @@
 // Pin Definitions
 #define SCALE_PIN_DAT	8
 #define SCALE_PIN_CLK	9
-#define PUSHBUTTON_PIN	1
 
 #define ENCODERA 11
 #define ENCODERB 10
 #define ENC_SWITCH 12
 #define RELAIS 7
+
+#define FLUSH_BUTTON A1
 
 
 // Global variables and defines
@@ -31,7 +32,7 @@
 // Constants
 #define MAX_RUNTIME 50
 #define MAX_SHOTTIME 35
-#define SCALE_CALIB_FAC 2.44
+#define SCALE_CALIB_FAC 2.44 * 1.012
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ 100
 #define ENC_CHECK_FREQ 20
@@ -42,8 +43,7 @@
 LiquidCrystal_PCF8574 lcdI2C;
 
 HX711 scale(SCALE_PIN_DAT, SCALE_PIN_CLK);
-//
-//Button pushButton(PUSHBUTTON_PIN);
+
 Button encButton(ENC_SWITCH);
 
 // Setup a RoraryEncoder for pins A2 and A3:
@@ -97,9 +97,10 @@ void setup()
     target_init = eepromReadInt(address);
     target_mass = target_init;
 
-//    pinMode(PUSHBUTTON_PIN, INPUT);
     pinMode(ENC_SWITCH, INPUT);
     pinMode(RELAIS, OUTPUT);
+
+    pinMode(FLUSH_BUTTON, INPUT);
     
 //    pushButton.init();
     encButton.init();
@@ -108,6 +109,7 @@ void setup()
 // Main logic of your circuit. It defines the interaction between the components you selected. After setup, it runs over and over again, in an eternal loop.
 void loop() 
 {
+    check_flush_button();
     check_scale();
     check_encoder();
     control_loop();
@@ -122,11 +124,11 @@ void control_loop(){
   if(is_running==true){      
       if(switch_happened==true){
         digitalWrite(RELAIS, HIGH);  
-        delay(50);
-        tare_scale();        
-        switch_happened = false;
         time_run_start = millis();
         time_shot_start = millis();
+        delay(50);
+        tare_scale();        
+        switch_happened = false;        
       }
       if(curr_mass < 1.5){
         time_shot_start = millis();
@@ -152,13 +154,18 @@ void control_loop(){
 
 /////////////////////////
 /////////////////////////
-//void check_scale(){
-//  if (millis() - last_scale_check < SCALE_CHECK_FREQ) 
-//    return;  
-//  last_scale_check = millis();
-//  curr_mass = -scale.get_units(); //scale.get_units() returns a float
-// 
-//}
+void check_flush_button(){
+  
+  if(digitalRead(FLUSH_BUTTON) == HIGH){
+    digitalWrite(RELAIS, HIGH);
+    delay(3000);
+    digitalWrite(RELAIS, LOW);
+  }
+}
+
+
+/////////////////////////
+/////////////////////////
 void check_scale(bool reset){
   
   if (millis() - last_scale_check > SCALE_CHECK_FREQ || reset==true){
@@ -205,7 +212,13 @@ void update_display(bool force_update){
   lcdI2C.setCursor(0,1);
   dtostrf(curr_shottime,4,1,LCDmsg_short);
   lcdI2C.print(LCDmsg_short);
-  lcdI2C.print(" /");
+
+  lcdI2C.print("(");
+  dtostrf(curr_runtime,4,1,LCDmsg_short);
+  lcdI2C.print(LCDmsg_short);
+  lcdI2C.print(")");
+  
+  lcdI2C.print("/");
   dtostrf(MAX_SHOTTIME,4,1,LCDmsg_short);
   lcdI2C.print(LCDmsg_short);
   lcdI2C.print("s      ");
@@ -222,8 +235,6 @@ void check_encoder() {
     
   switch (check_button_next%3){
 //    case 0: 
-//      Serial.print("Check Pushbutton: ");
-//      Serial.println(digitalRead(PUSHBUTTON_PIN));
 //      if (pushButton.onRelease())
 //      {
 //        tare_scale();
