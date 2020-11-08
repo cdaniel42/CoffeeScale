@@ -30,7 +30,7 @@
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ 100
 #define ENC_CHECK_FREQ 20
-#define DISP_UPDATE_FREQ 1000
+#define DISP_UPDATE_FREQ 100
 #define MASS_ESTIMATION_WINDOW 3
 
 // object initialization
@@ -153,6 +153,7 @@ void check_flush_button(){
     digitalWrite(RELAIS, HIGH);
     delay(3000);
     digitalWrite(RELAIS, LOW);
+    delay(100);
   }
 }
 
@@ -263,7 +264,7 @@ void tare_scale(){
   
   scale.tare();
   check_scale(true);
-  ssd1306_printFixed(0, 4, String(curr_mass).c_str(), STYLE_BOLD);
+  ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
   int taring_counter = 0;
   while (
     ((curr_mass>1) || (curr_mass <-1)) 
@@ -271,7 +272,7 @@ void tare_scale(){
     scale.tare();
     check_scale(true);
     taring_counter++;
-    ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
+    ssd1306_printFixed(64, 32, String(curr_mass).c_str(), STYLE_BOLD);
   }
   
   ssd1306_clearScreen( );
