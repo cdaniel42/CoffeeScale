@@ -30,7 +30,7 @@
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ 100
 #define ENC_CHECK_FREQ 20
-#define DISP_UPDATE_FREQ 100
+#define DISP_UPDATE_FREQ 1000
 #define MASS_ESTIMATION_WINDOW 3
 
 // object initialization
