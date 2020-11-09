@@ -11,15 +11,15 @@
 
 
 // Pin Definitions
-#define SCALE_PIN_DAT	8
-#define SCALE_PIN_CLK	9
+#define SCALE_PIN_DAT	9//2
+#define SCALE_PIN_CLK	8//3
 
 #define ENCODERA 11
 #define ENCODERB 10
 #define ENC_SWITCH 12
-#define RELAIS 7
+#define RELAIS 7//13
 
-#define FLUSH_BUTTON A1
+#define FLUSH_BUTTON A1//
 
 
 // Global variables and defines
@@ -28,9 +28,11 @@
 #define MAX_SHOTTIME 35
 #define SCALE_CALIB_FAC 2.44 * 1.012
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
-#define SCALE_CHECK_FREQ 100
+#define SCALE_CHECK_FREQ_BASE 500
+#define SCALE_CHECK_FREQ_RUNNING 50
 #define ENC_CHECK_FREQ 20
-#define DISP_UPDATE_FREQ 100
+#define DISP_UPDATE_FREQ_BASE 1000
+#define DISP_UPDATE_FREQ_RUNNING 100
 #define MASS_ESTIMATION_WINDOW 3
 
 // object initialization
@@ -49,7 +51,8 @@ int target_mass = 0;
 int target_init = 0;
 int16_t enc_value = 0;
 int16_t enc_last_value = 0;
-
+int disp_update_freq = DISP_UPDATE_FREQ_BASE;
+int scale_check_freq = SCALE_CHECK_FREQ_BASE;
 
 bool is_running = false;
 bool switch_happened = false;
@@ -85,14 +88,13 @@ void setup()
     ssd1306_128x64_i2c_init();
     ssd1306_clearScreen();
     scale.set_scale(calibration_factor / SCALE_CALIB_FAC); 
-//    tare_scale(); //Assuming there is no weight on the scale at start up, reset the scale to 0
+    tare_scale(); //Assuming there is no weight on the scale at start up, reset the scale to 0
     check_scale(true);
     target_init = eepromReadInt(address);
     target_mass = target_init;
 
     pinMode(ENC_SWITCH, INPUT);
     pinMode(RELAIS, OUTPUT);
-
     pinMode(FLUSH_BUTTON, INPUT);
     
 //    pushButton.init();
@@ -102,9 +104,9 @@ void setup()
 // Main logic of your circuit. It defines the interaction between the components you selected. After setup, it runs over and over again, in an eternal loop.
 void loop() 
 {
-    check_flush_button();
-    check_scale();
     check_encoder();
+    check_flush_button();
+    check_scale();    
     control_loop();
     update_display(false);    
 }
@@ -116,6 +118,8 @@ void control_loop(){
   
   if(is_running==true){      
       if(switch_happened==true){
+        disp_update_freq = DISP_UPDATE_FREQ_RUNNING;
+        scale_check_freq = SCALE_CHECK_FREQ_RUNNING;
         digitalWrite(RELAIS, HIGH);  
         time_run_start = millis();
         time_shot_start = millis();
@@ -136,6 +140,8 @@ void control_loop(){
    }
    if (is_running == false && switch_happened==true){    
       switch_happened = false;      
+      disp_update_freq = DISP_UPDATE_FREQ_BASE;
+      scale_check_freq = SCALE_CHECK_FREQ_BASE;
       digitalWrite(RELAIS, LOW);
       delay(100);
       update_display(true);
@@ -161,8 +167,7 @@ void check_flush_button(){
 /////////////////////////
 /////////////////////////
 void check_scale(bool reset){
-  
-  if (millis() - last_scale_check > SCALE_CHECK_FREQ || reset==true){
+  if (millis() - last_scale_check > scale_check_freq || reset==true){
     last_scale_check = millis();
     float tmp_mass = -scale.get_units(); //scale.get_units() returns a float
     if(reset==true){
@@ -184,7 +189,7 @@ void check_scale(bool reset){
 /////////////////////////
 void update_display(bool force_update){
   static String message;
-  if ( (millis() - last_disp_update) < DISP_UPDATE_FREQ && force_update==false)
+  if ( (millis() - last_disp_update) < disp_update_freq && force_update==false)
     return;
     
   last_disp_update = millis();
@@ -203,8 +208,7 @@ void update_display(bool force_update){
             ")/" + 
             String(MAX_SHOTTIME) 
             + "s     " );
-  ssd1306_printFixed(0,  32, message.c_str(), STYLE_BOLD);
-  
+  ssd1306_printFixed(0,  32, message.c_str(), STYLE_BOLD);  
 
   
 }
@@ -248,6 +252,7 @@ void check_encoder() {
           target_mass--;
           eepromWriteInt(address, target_mass);
         }
+        update_display(true);
       }
       break;
   }//switch
