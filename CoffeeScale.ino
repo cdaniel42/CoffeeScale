@@ -29,10 +29,10 @@
 #define SCALE_CALIB_FAC 2.44 * 1.012
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ_BASE 500
-#define SCALE_CHECK_FREQ_RUNNING 50
+#define SCALE_CHECK_FREQ_RUNNING 30
 #define ENC_CHECK_FREQ 20
 #define DISP_UPDATE_FREQ_BASE 1000
-#define DISP_UPDATE_FREQ_RUNNING 100
+#define DISP_UPDATE_FREQ_RUNNING 150
 #define MASS_ESTIMATION_WINDOW 3
 
 // object initialization
@@ -120,6 +120,7 @@ void control_loop(){
       if(switch_happened==true){
         disp_update_freq = DISP_UPDATE_FREQ_RUNNING;
         scale_check_freq = SCALE_CHECK_FREQ_RUNNING;
+        curr_runtime = 0.0;
         digitalWrite(RELAIS, HIGH);  
         time_run_start = millis();
         time_shot_start = millis();
@@ -145,7 +146,7 @@ void control_loop(){
       digitalWrite(RELAIS, LOW);
       delay(100);
       update_display(true);
-      curr_runtime = 0.0;  
+//      curr_runtime = 0.0;  
       delay(5000);          
    } 
   
@@ -156,10 +157,13 @@ void control_loop(){
 void check_flush_button(){
   
   if(digitalRead(FLUSH_BUTTON) == HIGH){
-    digitalWrite(RELAIS, HIGH);
-    delay(3000);
-    digitalWrite(RELAIS, LOW);
-    delay(100);
+    delay(5);
+    if(digitalRead(FLUSH_BUTTON) == HIGH){
+      digitalWrite(RELAIS, HIGH);
+      delay(3000);
+      digitalWrite(RELAIS, LOW);
+      delay(100);
+    }
   }
 }
 
@@ -267,18 +271,18 @@ void tare_scale(){
   ssd1306_clearScreen( );
   ssd1306_printFixed(0, 4, "Taring Scale", STYLE_BOLD);
   
-  scale.tare();
+  scale.tare(15);
   check_scale(true);
   ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
-  int taring_counter = 0;
-  while (
-    ((curr_mass>1) || (curr_mass <-1)) 
-     && (taring_counter< 2) ){
-    scale.tare();
-    check_scale(true);
-    taring_counter++;
-    ssd1306_printFixed(64, 32, String(curr_mass).c_str(), STYLE_BOLD);
-  }
+//  int taring_counter = 0;
+//  while (
+//    ((curr_mass>1) || (curr_mass <-1)) 
+//     && (taring_counter< 2) ){
+//    scale.tare();
+//    check_scale(true);
+//    taring_counter++;
+//    ssd1306_printFixed(64, 32, String(curr_mass).c_str(), STYLE_BOLD);
+//  }
   
   ssd1306_clearScreen( );
 }
