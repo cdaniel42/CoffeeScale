@@ -25,7 +25,7 @@
 // Global variables and defines
 // Constants
 #define MAX_RUNTIME 50
-#define MAX_SHOTTIME 35
+#define MAX_SHOTTIME 50
 #define SCALE_CALIB_FAC 2.44 * 1.012
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ_BASE 500
@@ -34,6 +34,8 @@
 #define DISP_UPDATE_FREQ_BASE 1000
 #define DISP_UPDATE_FREQ_RUNNING 150
 #define MASS_ESTIMATION_WINDOW 3
+#define PREINFUSION_TIME 2000 // Preinfusion pressure time in ms
+
 
 // object initialization
 
@@ -46,9 +48,11 @@ RotaryEncoder encoder(ENCODERB, ENCODERA);
 
 
 // define vars for testing menu
-int address = 0;
+int address_mass = 0;
 int target_mass = 0;
-int target_init = 0;
+//int target_init = 0;
+int address_preinfusion = address_mass + sizeof(address_mass);
+uint8_t preinfusion_waiting_time = 3; // Preinfusion waiting time in seconds 
 int16_t enc_value = 0;
 int16_t enc_last_value = 0;
 int disp_update_freq = DISP_UPDATE_FREQ_BASE;
@@ -57,6 +61,8 @@ int scale_check_freq = SCALE_CHECK_FREQ_BASE;
 bool is_running = false;
 bool switch_happened = false;
 bool count_switch = true;
+bool set_preinfusion_time = false;
+bool button_pressed = false;
 
 int rotary_pos = 0;
 
@@ -69,6 +75,7 @@ int mass_step = 0;
 
 unsigned long time_run_start = 0;
 unsigned long time_shot_start = 0;
+unsigned long time_button_press = 0;
 
 
 unsigned long last_disp_update = 0;
@@ -77,6 +84,7 @@ unsigned long last_enc_check = 0;
 unsigned long check_button_next = 0;
 
 void check_scale(bool reset=false);
+void flush_water();
 
 // Setup the essentials for your circuit to work. It runs first every time your circuit is powered with electricity.
 void setup() 
@@ -90,8 +98,10 @@ void setup()
     scale.set_scale(calibration_factor / SCALE_CALIB_FAC); 
     tare_scale(); //Assuming there is no weight on the scale at start up, reset the scale to 0
     check_scale(true);
-    target_init = eepromReadInt(address);
-    target_mass = target_init;
+    target_mass = eepromReadInt(address_mass);
+//    target_mass = target_init;
+    preinfusion_waiting_time = EEPROM.read(address_preinfusion);
+
 
     pinMode(ENC_SWITCH, INPUT);
     pinMode(RELAIS, OUTPUT);
@@ -126,8 +136,20 @@ void control_loop(){
         time_shot_start = millis();
         delay(100);
         tare_scale();        
+
+        
         switch_happened = false;        
       }
+
+      //PREINFUSION LOGIC
+      if (preinfusion_waiting_time >0) 
+      { 
+        if (millis() - time_run_start < PREINFUSION_TIME) digitalWrite(RELAIS, HIGH);  //Keep flowing for pressure time
+        else if (millis() - time_run_start < PREINFUSION_TIME + preinfusion_waiting_time * 1000) digitalWrite(RELAIS, LOW); //Pause for waiting time
+        else digitalWrite(RELAIS, HIGH);  
+      }
+
+        
       if(curr_mass < 1.5){
         time_shot_start = millis();
       }
@@ -155,18 +177,43 @@ void control_loop(){
 /////////////////////////
 /////////////////////////
 void check_flush_button(){
-  
-  if(digitalRead(FLUSH_BUTTON) == HIGH){
-    delay(5);
-    if(digitalRead(FLUSH_BUTTON) == HIGH){
-      digitalWrite(RELAIS, HIGH);
-      delay(3000);
-      digitalWrite(RELAIS, LOW);
-      delay(100);
-    }
+
+  if(digitalRead(FLUSH_BUTTON) == LOW){
+    set_preinfusion_time = false;
+    button_pressed = false;
+    return; // keep going only if pressed
   }
+  delay(5); // Check for ghost readings
+  if(digitalRead(FLUSH_BUTTON) == LOW) return; // keep going only if no ghost reading after 5ms
+  if(button_pressed == false){
+    button_pressed = true;
+    time_button_press = millis();  
+  }
+  
+  unsigned long time_pressed = millis() - time_button_press;
+
+  if(digitalRead(FLUSH_BUTTON) == LOW && time_pressed < 500){ // button was released, flush water
+    flush_water();
+  }
+
+  if(digitalRead(FLUSH_BUTTON) == HIGH && time_pressed > 500){ // button is held, set pre-infusion time
+    set_preinfusion_time = true;
+  }
+
+  
 }
 
+
+
+/////////////////////////
+/////////////////////////
+void flush_water(){
+  digitalWrite(RELAIS, HIGH);
+  delay(3000);
+  digitalWrite(RELAIS, LOW);
+  delay(100);
+
+}
 
 /////////////////////////
 /////////////////////////
@@ -206,11 +253,13 @@ void update_display(bool force_update){
   ssd1306_printFixed(0,  4, message.c_str(), STYLE_BOLD);
 
   message = String( 
+            String(preinfusion_waiting_time) + 
+            "|" + 
             String(curr_shottime) + 
-            "(" + 
+            "|" + 
             String(curr_runtime) + 
-            ")/" + 
-            String(MAX_SHOTTIME) 
+//            ")/" + 
+//            String(MAX_SHOTTIME) 
             + "s     " );
   ssd1306_printFixed(0,  32, message.c_str(), STYLE_BOLD);  
 
@@ -250,11 +299,23 @@ void check_encoder() {
         rotary_pos = newPos;
         if (int(encoder.getDirection())<0)
         {
-          target_mass++;
-          eepromWriteInt(address, target_mass);
-        }else{
-          target_mass--;
-          eepromWriteInt(address, target_mass);
+          if(set_preinfusion_time==true){ // button is held and rotary is used to set pre-infusion time
+            preinfusion_waiting_time++;
+            EEPROM.write(address_preinfusion, preinfusion_waiting_time);
+          }else{ // button is not held
+            target_mass++;
+            eepromWriteInt(address_mass, target_mass);  
+          }
+          
+        }else{ // direction of rotary is 'negative'
+          if(set_preinfusion_time==true){ // button is held and rotary is used to set pre-infusion time
+            preinfusion_waiting_time--;
+            EEPROM.write(address_preinfusion, preinfusion_waiting_time);
+          }else{ // button is not held
+            target_mass--;
+            eepromWriteInt(address_mass, target_mass);  
+          }
+          
         }
         update_display(true);
       }
@@ -276,15 +337,6 @@ void tare_scale(){
   scale.tare(15);
   check_scale(true);
   ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
-//  int taring_counter = 0;
-//  while (
-//    ((curr_mass>1) || (curr_mass <-1)) 
-//     && (taring_counter< 2) ){
-//    scale.tare();
-//    check_scale(true);
-//    taring_counter++;
-//    ssd1306_printFixed(64, 32, String(curr_mass).c_str(), STYLE_BOLD);
-//  }
   
   ssd1306_clearScreen( );
 }
