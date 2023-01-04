@@ -124,7 +124,7 @@ void control_loop(){
         digitalWrite(RELAIS, HIGH);  
         time_run_start = millis();
         time_shot_start = millis();
-        delay(50);
+        delay(100);
         tare_scale();        
         switch_happened = false;        
       }
@@ -147,7 +147,7 @@ void control_loop(){
       delay(100);
       update_display(true);
 //      curr_runtime = 0.0;  
-      delay(5000);          
+//      delay(5000);          
    } 
   
 }
@@ -271,6 +271,8 @@ void tare_scale(){
   ssd1306_clearScreen( );
   ssd1306_printFixed(0, 4, "Taring Scale", STYLE_BOLD);
   
+  scale.tare(5);
+  delay(100);
   scale.tare(15);
   check_scale(true);
   ssd1306_printFixed(0, 32, String(curr_mass).c_str(), STYLE_BOLD);
