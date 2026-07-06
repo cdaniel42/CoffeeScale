@@ -24,8 +24,8 @@
 
 // Global variables and defines
 // Constants
-#define MAX_RUNTIME 50
-#define MAX_SHOTTIME 50
+#define MAX_RUNTIME 90
+#define MAX_SHOTTIME 90
 #define SCALE_CALIB_FAC 2.44 * 1.012
 #define calibration_factor 2280 //This value is obtained using the SparkFun_HX711_Calibration sketch https://learn.sparkfun.com/tutorials/load-cell-amplifier-hx711-breakout-hookup-guide?_ga=2.77038550.2126325781.1526891300-303225217.1493631967
 #define SCALE_CHECK_FREQ_BASE 500
